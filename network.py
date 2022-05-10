@@ -1,6 +1,7 @@
 import numpy
 import random
 import connection
+import lightpath
 import line
 import node
 import signal_information
@@ -24,7 +25,7 @@ def calculate_snr(sig):
 
 
 class Network:
-
+    channel_num = 10
 
 
     def __init__(self):
@@ -51,14 +52,14 @@ class Network:
                     d = second.get_position()
                     length = min_distance(c[0], d[0], c[1], d[1])
                     line1 = line.Line(line_name, length)
+                    #to set up channel as free I use the variable channel_num a
+                    line1.setup_state(self.channel_num)
                     #line1.set_successive(b, second)
                     self.lines[line_name] = line1
                     #self.nodes[a].set_successive(line_name, line1)
                     line_name = b + a
                     line2 = line.Line(line_name, length)
-                    # TODO: add successive node to line(n)
-                    #line2.set_successive(a, n)
-                    #self.nodes[b].set_successive(line_name, line2)
+                    line2.setup_state(self.channel_num)
                     self.lines[line_name] = line2
 
     def connect(self):
@@ -81,32 +82,31 @@ class Network:
         return res
 
     def pathR(self, end_label: str, path: list[str], node1: node.Node):
-        #print("REC")
-        #print("PATH= ", path)
         next1 = node1.get_connected_nodes()
 
         for n1 in next1:
             if n1 in path:
                 continue
             path.append(n1)
-            #print("path ",path)
             if n1 is end_label:
                 path2 = path.copy()
-                #print("res ", path)
                 self.res.append(path2)
             else:
-                #print(path)
                 #copio lista
                 self.pathR(end_label, path, self.nodes.get(n1))
             path.pop(-1)
 
-    def propagate(self, sig_info: signal_information.Signal_information):
+    def propagate(self, sig):
+        start_label = sig.get_path()[0]
+        start_node = self.nodes.get(start_label)
+        start_node.propagate(sig)
+
+    def probe(self, sig_info):
         start_label = sig_info.get_path()[0]
         start_node = self.nodes.get(start_label)
-        start_node.propagate(sig_info)
+        start_node.probe(sig_info)
 
     def draw(self):
-        #x = numpy.linspace(-1000e3, 1000e3, 1000)
         plt.grid()
 
         for i in self.nodes:
@@ -141,7 +141,7 @@ class Network:
                         tmp.pop(-1)
                         res = "".join(tmp)
                         sig = signal_information.Signal_information(0.001, path1)
-                        self.propagate(sig)
+                        self.probe(sig)
                         names.append(res)
                         noise.append(sig.get_noise_power())
                         latency.append(sig.get_latency())
@@ -230,7 +230,7 @@ class Network:
                 self.occupy_path(path)
                 #print(path_list)
                 sig = signal_information.Signal_information(elem.get_signal_power(), path_list)
-            self.propagate(sig)
+            self.probe(sig)
             elem.set_latency(sig.get_latency())
             elem.set_snr(calculate_snr(sig))
         self.free_all()
@@ -258,6 +258,7 @@ def main():
     network = Network()
     network.connect()
     network.create_data_frame()
+    """
     snr_collection = []
     lat_collection = []
     for i in range(0, 100):
@@ -296,7 +297,15 @@ def main():
     plt.xlabel("Latency")
     plt.ylabel("Number of connections")
     plt.show()
-
+    """
+    path = ["A", "B"]
+    #if the path after the propagate method is not None -> path is occupied
+    sig = lightpath.Lightpath(0,path,0)
+    network.propagate(sig)
+    print(sig.get_path())
+    sig1 = lightpath.Lightpath(0, ["A", "B"], 0)
+    network.probe(sig1)
+    print(sig1.get_path())
 
 if __name__ == "__main__":
     main()

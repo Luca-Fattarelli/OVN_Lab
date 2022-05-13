@@ -10,7 +10,7 @@ class Line:
         self.label = label
         self.length = length
         self.successive = {}
-        self.state = [1]
+        self.state = []
 
     # TODO: getter and setter
 
@@ -21,8 +21,8 @@ class Line:
     def set_successive(self, label: str, node1: node.Node):
         self.successive[label] = node1
 
-    def get_state(self):
-        return self.state[0]
+    def get_all_states(self):
+        return self.state
 
     def decrease_state(self):
         self.state[0] = 0
@@ -32,7 +32,7 @@ class Line:
     # speed m /s
 
     def set_state(self, channel_index, state):
-        self.state[channel_index] = state
+        self.state[channel_index] = 0
 
     def get_state(self, channel_index):
         return self.state[channel_index]

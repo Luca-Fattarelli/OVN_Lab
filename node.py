@@ -33,10 +33,10 @@ class Node:
         channel = sig.get_channel()
         if next_line is None:
             return
-        if next_line.get_state(channel) == 1:
+        if next_line.get_state(channel) == "1":
             next_line.propagate(sig)
         else:
-            print("EEEEEEh?")
+            print("EEEEEEh?", channel, sig.get_path())
             return
 
     def probe(self, sig_info: lightpath.Lightpath):
@@ -52,7 +52,7 @@ class Node:
             # print("End(NOLINE)\n")
             return
         if type(sig_info).__name__ is signal_information.Signal_information.__name__ \
-                or next_line.get_state(sig_info.get_channel()) == 1:
+                or next_line.get_state(sig_info.get_channel()) == "1":
 
             next_line.probe(sig_info)
         else:

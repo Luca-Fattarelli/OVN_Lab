@@ -18,7 +18,9 @@ def min_distance(x1: float, x2, y1, y2):
     res = a * a + b * b
     return math.sqrt(res)
 
+
 def calculate_snr(sig):
+    #print(sig.get_noise_power())
     x = sig.get_signal_power() / sig.get_noise_power()
     r = 10 * numpy.log10(x)
     return r
@@ -57,10 +59,11 @@ class Network:
                     #line1.set_successive(b, second)
                     self.lines[line_name] = line1
                     #self.nodes[a].set_successive(line_name, line1)
-                    line_name = b + a
-                    line2 = line.Line(line_name, length)
-                    line2.setup_state(self.channel_num)
-                    self.lines[line_name] = line2
+                    #mod
+                    #line_name = b + a
+                    #line2 = line.Line(line_name, length)
+                    #line2.setup_state(self.channel_num)
+                    #self.lines[line_name] = line2
 
     def connect(self):
         for a in self.nodes:
@@ -124,6 +127,44 @@ class Network:
             plt.plot(x_values, y_values, linestyle="--")
         plt.show()
 
+    def create_route_space(self):
+        names = []
+        channels = []
+        #columns for each channel
+        for i in range(0, self.channel_num):
+            channels.append([])
+        #find all paths
+        for a in self.nodes:
+            for b in self.nodes:
+                if a is not b:
+                    paths = self.find_paths(a,b)
+                    for path1 in paths:
+                        tmp = []
+                        for p in path1:
+                            tmp.append(p)
+                            tmp.append("->")
+                        tmp.pop(-1)
+                        res = "".join(tmp)
+                        #create a lightpath for each channel to check availabilty
+                        for i in range(0, self.channel_num):
+                            path_copy = path1.copy()
+                            lightp = lightpath.Lightpath(0.001, path_copy, i)
+                            self.probe(lightp)
+                            # if the path after the propagate method is not empty -> path is occupied
+                            # empty list is considered false in python: full (true) means not empty
+                            if lightp.get_path():
+                                channels[i].append("0")
+                            else:
+                                channels[i].append("1")
+                        names.append(res)
+        #print(names)
+        dataD = {}
+        for i in range(0, self.channel_num):
+            string = "Channel " + str(i)
+            dataD[string] = channels[i]
+        self.route_space =pd.DataFrame(dataD, names)
+
+
     def create_data_frame(self):
         names = []
         latency = []
@@ -153,6 +194,7 @@ class Network:
         self.weighted_paths = dataframe
 
     def is_path_free(self, path: list[str]):
+        # Used before route_space
         path_l = path.split("->")
         for i in range(0, len(path_l) - 1):
             label = path_l[i] + path_l[i + 1]
@@ -161,26 +203,15 @@ class Network:
                 return False
         return True
 
-    def occupy_path(self, path: list[str]):
-        path_l = path.split("->")
-        for i in range(0, len(path_l) - 1):
-            label = path_l[i] + path_l[i+1]
-            self.lines.get(label).decrease_state()
+    def occupy_path(self, path: list[str], channel: int):
+        self.create_route_space()
 
     def free_all(self):
         for line1 in self.lines.values():
-            line1.free_state()
+            line1.setup_state(self.channel_num)
 
     def find_best_snr(self, a: str, b: str):
-        """best_path = None
-        best_ratio = None
-        for index, row in self.weighted_paths.iterrows():
-            # print(row["Signal to noise ratio"])
-            if index[0] is a and index[-1] is b:
-                if best_ratio is None or row["Signal to noise ratio"] > best_ratio:
-                    best_ratio = row["Signal to noise ratio"]
-                    best_path = index
-        return best_path"""
+        """OLD VERSION(no route_space)
         best_path = None
         best_ratio = None
         for index, row in self.weighted_paths.iterrows():
@@ -190,75 +221,81 @@ class Network:
                     if self.is_path_free(index):
                         best_ratio = row["Signal to noise ratio"]
                         best_path = index
-        return best_path
+        return best_path"""
+        best_path = None
+        best_snr = None
+        channel = -1
+        for index, row in self.weighted_paths.iterrows():
+            if index[0] is a and index[-1] is b:
+                if best_snr is None or row["Signal to noise ratio"] > best_snr:
+                    r = self.route_space.loc[[index]]
+                    for i in range(0, self.channel_num):
+                        string = "Channel " + str(i)
+                        val = r[string]
+                        if val.item() == "1":
+                            best_snr = row["Latency"]
+                            best_path = index
+                            channel = i
+                            break
+        return best_path, channel
 
     def find_best_latency(self, a: str, b: str):
+        #finds avaialable path with best latency: returns path (and first available channel)
         best_path = None
         best_lat = None
-        """for index, row in self.weighted_paths.iterrows():
-            if index[0] is a and index[-1] is b:
-                if best_lat is None or row["Latency"] < best_lat:
-                    best_lat = row["Latency"]
-                    best_path = index"""
+        channel = -1
         for index, row in self.weighted_paths.iterrows():
             if index[0] is a and index[-1] is b:
                 if best_lat is None or row["Latency"] < best_lat:
-                    if self.is_path_free(index):
-                        best_lat = row["Latency"]
-                        best_path = index
-        return best_path
+                    r = self.route_space.loc[[index]]
+                    for i in range(0, self.channel_num):
+                        string = "Channel " + str(i)
+                        val = r[string]
+                        if val.item() == "1":
+                            best_lat = row["Latency"]
+                            best_path = index
+                            channel = i
+                            break
+        return best_path, channel
+
 
     def stream(self, connection_list: list[connection.Connection], label="Latency"):
         for elem in connection_list:
             if label == "SNR":
-                path = self.find_best_snr(elem.get_input(), elem.get_output())
+                path, channel = self.find_best_snr(elem.get_input(), elem.get_output())
                 if path is None:
                     elem.set_latency(None)
                     elem.set_snr(0)
                     continue
                 path_list = path.split("->")
-                self.occupy_path(path)
-                sig = signal_information.Signal_information(elem.get_signal_power(), path_list)
+                lp = lightpath.Lightpath(elem.get_signal_power(), path_list, channel)
             elif label == "Latency":
-                path = self.find_best_latency(elem.get_input(), elem.get_output())
+                path, channel = self.find_best_latency(elem.get_input(), elem.get_output())
                 #print(path)
                 if path is None:
                     elem.set_latency(None)
                     elem.set_snr(0)
                     continue
                 path_list = path.split("->")
-                self.occupy_path(path)
                 #print(path_list)
-                sig = signal_information.Signal_information(elem.get_signal_power(), path_list)
-            self.probe(sig)
-            elem.set_latency(sig.get_latency())
-            elem.set_snr(calculate_snr(sig))
-        self.free_all()
-""" 
-OLD TESTS
-network = Network()
-network.connect()
-#for n in network.nodes:
-#    print(n)
-#    print(network.nodes.get(n).successive)
-list1 = ["A", "B", "D"]
-sig_inf = signal_information.Signal_information(10.0, list1)
-#network.nodes.get("A").propagate(sig_inf)
-#print(sig_inf)
-paths = network.find_paths("A","B")
+                lp = lightpath.Lightpath(elem.get_signal_power(), path_list, channel)
+            #print(lp.get_path())
+            #elem.set_snr(self.weighted_paths.loc[[path]]["Signal to noise ratio"])
+            #elem.set_snr(1)
+            #print("Propagation", path, channel)
+            self.propagate(lp)
+            self.occupy_path(path, channel)
+            elem.set_latency(lp.get_latency())
+            elem.set_snr(calculate_snr(lp))
 
-#print("lines ", network.find_paths("A", "B"))
-#network.propagate(sig_inf)
-#print(sig_inf.get_signal_power(),sig_inf.get_noise_power(),sig_inf.get_latency())
-network.create_data_frame() """
-
+        #self.free_all()
 
 def main():
     #es LAB 4
     network = Network()
     network.connect()
     network.create_data_frame()
-    """
+    network.create_route_space()
     snr_collection = []
     lat_collection = []
     for i in range(0, 100):
@@ -268,6 +305,7 @@ def main():
             output = random.choice(list(network.nodes.keys()))
         con = connection.Connection(input1, output, 0.001)
         snr_collection.append(con)
+
     for i in range(0, 100):
         output = None
         input1 = random.choice(list(network.nodes.keys()))
@@ -276,7 +314,10 @@ def main():
         con = connection.Connection(input1, output, 0.001)
         lat_collection.append(con)
     network.stream(lat_collection)
+    print(network.route_space)
+    network.free_all()
     network.stream(snr_collection, "SNR")
+    print(network.route_space)
     #plt.rcParams.update()
     snr_list = []
     lat_list = []
@@ -297,15 +338,24 @@ def main():
     plt.xlabel("Latency")
     plt.ylabel("Number of connections")
     plt.show()
-    """
+
+
+
     path = ["A", "B"]
     #if the path after the propagate method is not None -> path is occupied
-    sig = lightpath.Lightpath(0,path,0)
+    """sig = lightpath.Lightpath(0,path,0)
     network.propagate(sig)
     print(sig.get_path())
-    sig1 = lightpath.Lightpath(0, ["A", "B"], 0)
-    network.probe(sig1)
+    network.create_route_space()
+    sig1 = lightpath.Lightpath(0, ["A", "B"], 1)
+    network.propagate(sig1)
     print(sig1.get_path())
+    #network.create_route_space()
+    #print((network.route_space.loc[["A->B"]]))
+    #print(network.find_best_snr("A","B"))
+"""
+
+
 
 if __name__ == "__main__":
     main()

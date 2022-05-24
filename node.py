@@ -4,12 +4,19 @@ import line
 
 
 class Node:
-    def __init__(self, label: str, position, connected_nodes):
+    def __init__(self, label: str, position, connected_nodes, transceiver='fixed-rate'):
         self.label = label
         self.position = position
         self.connected_nodes = connected_nodes
+        self.transceiver = transceiver
         self.successive = {}
     # TODO: getter a
+
+    def set_transceiver(self, transceiver):
+        self.transceiver = transceiver
+
+    def get_transceiver(self):
+        return self.transceiver
 
     def get_label(self):
         return self.label

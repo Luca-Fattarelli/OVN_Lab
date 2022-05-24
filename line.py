@@ -38,12 +38,13 @@ class Line:
         return self.state[channel_index]
 
     def latency_generation(self,sig_info: signal_information.Signal_information):
-        transmission_speed = 2 * 10 ^ 8
+        transmission_speed = 2 * 10 ** 8
         lat = self.length / transmission_speed
         return lat
 
     def noise_generation(self, sig_info: signal_information.Signal_information):
-        noise = np.exp(-9) * sig_info.get_signal_power() * self.length
+        #noise = np.exp(-9) * sig_info.get_signal_power() * self.length
+        noise = 1e-9 * sig_info.get_signal_power() * self.length
         return noise
 
     def propagate(self, sig: lightpath.Lightpath):

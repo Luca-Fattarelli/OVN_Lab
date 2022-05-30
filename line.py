@@ -1,6 +1,9 @@
+import scipy.constants
+import line_constants
 import node
 import signal_information
 import lightpath
+import math_db
 import numpy as np
 
 
@@ -11,6 +14,7 @@ class Line:
         self.length = length
         self.successive = {}
         self.state = []
+        self.n_amplifiers = length / 80000 + 2
 
     # TODO: getter and setter
 
@@ -61,4 +65,14 @@ class Line:
         # node propagation
         node1.probe(sig_info)
 
+    # returns Amplified Spontaneous Emissions in LINEAR UNITS
+    def ase_generation(self):
+        res = self.n_amplifiers * (scipy.constants.Planck * line_constants.f_ase * line_constants.b_n *
+                                   math_db.db_to_linear(line_constants.noise_figure) *
+                                   (math_db.db_to_linear(line_constants.gain) - 1))
+        return res
+
+    def nli_generation(self, n_span, sig: lightpath.Lightpath):
+        nli = line_constants.b_n * n_span * (sig.get_signal_power() ** 3)
+        return nli
 

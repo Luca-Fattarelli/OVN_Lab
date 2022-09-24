@@ -45,4 +45,3 @@ class Signal_information:
 
     def path_update(self):
         return self.__path.pop(0)
-

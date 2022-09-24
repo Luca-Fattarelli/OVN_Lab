@@ -14,3 +14,6 @@ class Lightpath(signal_information.Signal_information):
 
     def get_channel(self):
         return self.attribute_channel
+
+    def get_r_s(self):
+        return self.r_s
